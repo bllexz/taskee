@@ -30,6 +30,14 @@ impl<P: Default + Clone> TaskData<P> {
   pub(super) fn send_update(&self, tx: &Sender<Self>) {
     tx.send(self.clone()).ok();
   }
+
+  pub fn duration(&self) -> Option<Duration> {
+    match (self.started_at, self.finished_at) {
+      (Some(start), Some(end)) => end.duration_since(start).ok(),
+      (Some(start), None) => SystemTime::now().duration_since(start).ok(),
+      _ => None,
+    }
+  }
 }
 
 //
@@ -49,7 +57,7 @@ impl<P: Default + Clone + Send + Sync + 'static> TaskHandle<P> {
     self.abort.load(Ordering::Relaxed)
   }
 
-  pub fn on_update<F: Fn(TaskData<P>) + Send + Sync + 'static>(&self, f: F) -> JoinHandle<()> {
+  pub fn on_update<F: Fn(TaskData<P>) + Send + 'static>(&self, f: F) -> JoinHandle<()> {
     let mut rx = self.rx.clone();
     tokio::spawn(async move {
       while rx.changed().await.is_ok() {
@@ -59,23 +67,37 @@ impl<P: Default + Clone + Send + Sync + 'static> TaskHandle<P> {
     })
   }
 
-  pub async fn wait(&mut self) -> TaskData<P> {
+  pub async fn wait(&self) -> TaskData<P> {
+    let mut rx = self.rx.clone();
     loop {
       let is_finished = {
-        let state = self.rx.borrow_and_update();
+        let state = rx.borrow_and_update();
         state.finished_at.is_some()
       };
       if is_finished || self.was_aborted() {
-        return self.rx.borrow().clone();
+        return rx.borrow().clone();
       }
-      if self.rx.changed().await.is_err() {
+      if rx.changed().await.is_err() {
         break;
       }
     }
     self.rx.borrow().clone()
   }
 
-  pub async fn wait_timeout(&mut self, dur: Duration) -> Result<TaskData<P>, Elapsed> {
+  pub async fn wait_map<T, F: FnOnce(TaskData<P>) -> T>(&self, f: F) -> T {
+    let result = self.wait().await;
+    f(result)
+  }
+
+  pub async fn wait_timeout(&self, dur: Duration) -> Result<TaskData<P>, Elapsed> {
     tokio::time::timeout(dur, self.wait()).await
+  }
+
+  pub fn on_finish<F: FnOnce(TaskData<P>) + Send + 'static>(&self, f: F) -> JoinHandle<()> {
+    let handle = self.clone();
+    tokio::spawn(async move {
+      let result = handle.wait().await;
+      f(result);
+    })
   }
 }
