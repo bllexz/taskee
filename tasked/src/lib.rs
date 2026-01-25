@@ -64,23 +64,11 @@ impl<P: Default + Clone> Task<P> {
   }
 }
 
-impl<P: Default + Clone> Drop for Task<P> {
-  fn drop(&mut self) {
-    if let Ok(mut state) = self.state.try_write()
-      && state.finished_at.is_none()
-    {
-      state.finished_at = Some(SystemTime::now());
-      self.tx.send(state.clone()).ok();
-    }
-  }
-}
-
 // wrapper for tasked-derive
 #[doc(hidden)]
 pub trait WrapTask<P: Default + Clone> {
   fn from_task(task: Task<P>) -> Self;
 }
-
 impl<P: Default + Clone> Task<P> {
   pub async fn new_wrapped<W: WrapTask<P>>(id: impl Into<String>) -> (W, TaskHandle<P>) {
     let (task, handle) = Self::new(id).await;

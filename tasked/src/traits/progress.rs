@@ -6,10 +6,10 @@ pub trait Progress {
   fn set_total(&mut self, val: u64);
   fn set_progress(&mut self, val: u8);
   fn calc_progress(&self) -> u8 {
-    if self.total() != 0 {
-      return ((self.current() as f64 / self.total() as f64) * 100.0).min(100.0) as u8;
+    if self.total() == 0 {
+      return 0;
     }
-    0
+    ((self.current() as f64 / self.total() as f64) * 100.0).min(100.0) as u8
   }
 }
 

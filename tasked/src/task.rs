@@ -39,7 +39,6 @@ impl<P: Default + Clone> TaskData<P> {
     }
   }
 }
-
 //
 
 #[derive(Clone)]

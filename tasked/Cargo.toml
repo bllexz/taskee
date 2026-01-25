@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tasked-derive = { path = "../tasked-derive" }
-tokio = { workspace = true }
+tasked_derive = { path = "../tasked-derive" }
+
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

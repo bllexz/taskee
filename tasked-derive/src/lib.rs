@@ -5,6 +5,7 @@ use syn::{DeriveInput, Ident};
 #[proc_macro_derive(Task, attributes(tasked))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
   let input = syn::parse_macro_input!(input as DeriveInput);
+  let vis = &input.vis;
   let payload = &input.ident;
   let task = format_ident!("{}Task", payload);
 
@@ -62,7 +63,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
 
   quote! {
     #[derive(Clone)]
-    pub struct #task(tasked::Task<#payload>);
+    #vis struct #task(tasked::Task<#payload>);
 
     impl tasked::WrapTask<#payload> for #task {
       fn from_task(task: tasked::Task<#payload>) -> Self {
@@ -71,11 +72,11 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
     }
 
     impl #task {
-      pub async fn new(id: impl Into<String>) -> (Self, tasked::TaskHandle<#payload>) {
+      #vis async fn new(id: impl Into<String>) -> (Self, tasked::TaskHandle<#payload>) {
         tasked::Task::<#payload>::new_wrapped::<Self>(id).await
       }
 
-      pub async fn close(self) {
+      #vis async fn close(self) {
         self.0.close().await;
       }
     }

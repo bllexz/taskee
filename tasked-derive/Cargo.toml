@@ -1,12 +1,12 @@
 [package]
-name = "tasked-derive"
+name = "tasked_derive"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-proc-macro2 = "1.0.103"
-quote = "1.0.42"
-syn = "2.0.111"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
 
 [lib]
 proc-macro = true

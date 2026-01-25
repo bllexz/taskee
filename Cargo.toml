@@ -1,0 +1,13 @@
+[workspace]
+members = ["tasked", "tasked-derive"]
+resolver = "2"
+
+[patch.crates-io]
+tasked = { path = "tasked" }
+tasked_derive = { path = "tasked-derive" }
+
+[workspace.dependencies]
+tokio = { version = "1.44.1", default-features = false }
+proc-macro2 = "1.0.103"
+quote = "1.0.42"
+syn = "2.0.111"
