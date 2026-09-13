@@ -1,13 +1,22 @@
 [workspace]
-members = ["tasked", "tasked-derive"]
+members = ["taskee-derive"]
 resolver = "2"
-
-[patch.crates-io]
-tasked = { path = "tasked" }
-tasked_derive = { path = "tasked-derive" }
 
 [workspace.dependencies]
 tokio = { version = "1.44.1", default-features = false }
 proc-macro2 = "1.0.103"
 quote = "1.0.42"
 syn = "2.0.111"
+
+[package]
+name = "taskee"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+taskee-derive = { path = "taskee-derive" }
+
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

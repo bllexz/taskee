@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Ident};
 
-#[proc_macro_derive(Task, attributes(tasked))]
+#[proc_macro_derive(Task, attributes(taskee))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
   let input = syn::parse_macro_input!(input as DeriveInput);
   let vis = &input.vis;
@@ -12,7 +12,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
   let mut status = false;
   let mut progress = false;
 
-  for attr in input.attrs.iter().filter(|attr| attr.path().is_ident("tasked")) {
+  for attr in input.attrs.iter().filter(|attr| attr.path().is_ident("taskee")) {
     if let Err(e) = attr.parse_nested_meta(|meta| {
       if meta.path.is_ident("status") {
         status = true;
@@ -48,7 +48,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
 
   let progress_impl = if progress {
     quote! {
-      impl tasked::Progress for #payload {
+      impl taskee::Progress for #payload {
         fn current(&self) -> u64 { self.current }
         fn total(&self) -> u64 { self.total }
         fn progress(&self) -> u8 { self.progress }
@@ -63,17 +63,17 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
 
   quote! {
     #[derive(Clone)]
-    #vis struct #task(tasked::Task<#payload>);
+    #vis struct #task(taskee::Task<#payload>);
 
-    impl tasked::WrapTask<#payload> for #task {
-      fn from_task(task: tasked::Task<#payload>) -> Self {
+    impl taskee::WrapTask<#payload> for #task {
+      fn from_task(task: taskee::Task<#payload>) -> Self {
         Self(task)
       }
     }
 
     impl #task {
-      #vis async fn new(id: impl Into<String>) -> (Self, tasked::TaskHandle<#payload>) {
-        tasked::Task::<#payload>::new_wrapped::<Self>(id).await
+      #vis async fn new(id: impl Into<String>) -> (Self, taskee::TaskHandle<#payload>) {
+        taskee::Task::<#payload>::new_wrapped::<Self>(id).await
       }
 
       #vis async fn close(self) {
@@ -82,7 +82,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
     }
 
     impl std::ops::Deref for #task {
-      type Target = tasked::Task<#payload>;
+      type Target = taskee::Task<#payload>;
       fn deref(&self) -> &Self::Target {
         &self.0
       }

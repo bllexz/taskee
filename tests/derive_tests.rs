@@ -1,7 +1,7 @@
-use tasked::{Progress, Task, TaskStatus};
+use taskee::{Progress, Task, TaskStatus};
 
 #[derive(Default, Clone, Task)]
-#[tasked(progress)]
+#[taskee(progress)]
 struct Download {
   current: u64,
   total: u64,
@@ -72,7 +72,7 @@ pub enum DownloadStatus {
 }
 
 #[derive(Default, Clone, Task)]
-#[tasked(status)]
+#[taskee(status)]
 pub struct DownloadWithStatus {
   status: DownloadStatus,
   bytes_downloaded: u64,
@@ -130,7 +130,7 @@ pub enum ProcessStatus {
 }
 
 #[derive(Default, Clone, Task)]
-#[tasked(status, progress)]
+#[taskee(status, progress)]
 pub struct ProcessPayload {
   status: ProcessStatus,
   current: u64,

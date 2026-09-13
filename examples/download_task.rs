@@ -1,6 +1,6 @@
 //! Download task example
 
-use tasked::{Task, TaskStatus};
+use taskee::{Task, TaskStatus};
 
 // You can create a status enum for your task
 // It must have one default status and optional terminals
@@ -20,7 +20,7 @@ pub enum DownloadStatus {
 
 // Now you can create your custom payload
 #[derive(Task, Default, Clone)]
-#[tasked(progress, status)]
+#[taskee(progress, status)]
 pub struct Download {
   pub id: String,
   pub status: DownloadStatus,
@@ -54,7 +54,7 @@ impl DownloadTask {
   }
 
   pub async fn add_progress_msg(&self, amount: u64, message: impl Into<String>) {
-    use tasked::Progress;
+    use taskee::Progress;
     self
       .update(|payload| {
         let prev_progress = payload.progress();

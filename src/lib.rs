@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::SystemTime};
 use tokio::sync::{RwLock, watch};
 
-pub use tasked_derive::Task;
-pub use tasked_derive::TaskStatus;
+pub use taskee_derive::Task;
+pub use taskee_derive::TaskStatus;
 
 #[derive(Clone)]
 pub struct Task<P: Default + Clone> {
@@ -64,7 +64,7 @@ impl<P: Default + Clone> Task<P> {
   }
 }
 
-// wrapper for tasked-derive
+// wrapper for taskee-derive
 #[doc(hidden)]
 pub trait WrapTask<P: Default + Clone> {
   fn from_task(task: Task<P>) -> Self;

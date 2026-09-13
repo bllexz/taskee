@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
-use tasked::{Task, TaskHandle};
+use taskee::{Task, TaskHandle};
 
 #[tokio::test]
 async fn task_create_and_close() {
