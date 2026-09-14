@@ -1,102 +1,145 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{sync::Arc, time::SystemTime};
-use tokio::sync::watch::{Receiver, Sender};
-use tokio::task::JoinHandle;
-use tokio::time::{Duration, error::Elapsed};
+use crate::{channel::Channel, data::TaskData, handle::TaskHandle};
+use std::future::Future;
+use std::sync::Arc;
 
-#[derive(Default, Clone)]
-pub struct TaskData<P: Default + Clone> {
-  pub id: String,
-  pub payload: P,
-  pub finished_at: Option<SystemTime>,
-  pub started_at: Option<SystemTime>,
+pub trait TaskPayload: Default + Clone + Send + Sync + 'static {}
+impl<P: Default + Clone + Send + Sync + 'static> TaskPayload for P {}
+
+pub trait AsTask: Sized {
+  type Payload: TaskPayload;
+
+  fn as_task(&self) -> &Task<Self::Payload>;
+  fn into_task(self) -> Task<Self::Payload>;
 }
 
-impl<P: Default + Clone> TaskData<P> {
-  pub(super) fn new(id: String) -> Self {
-    Self { id, ..Self::default() }
+impl<P: TaskPayload> AsTask for Task<P> {
+  type Payload = P;
+
+  fn as_task(&self) -> &Task<P> {
+    self
   }
 
-  pub(super) fn start(&mut self, tx: &Sender<Self>) {
-    self.started_at = Some(SystemTime::now());
-    self.send_update(tx);
-  }
-
-  pub(super) fn finish(&mut self, tx: &Sender<Self>) {
-    self.finished_at = Some(SystemTime::now());
-    self.send_update(tx);
-  }
-
-  pub(super) fn send_update(&self, tx: &Sender<Self>) {
-    tx.send(self.clone()).ok();
-  }
-
-  pub fn duration(&self) -> Option<Duration> {
-    match (self.started_at, self.finished_at) {
-      (Some(start), Some(end)) => end.duration_since(start).ok(),
-      (Some(start), None) => SystemTime::now().duration_since(start).ok(),
-      _ => None,
-    }
+  fn into_task(self) -> Task<P> {
+    self
   }
 }
-//
 
+struct Producer<P> {
+  chan: Arc<Channel<P>>,
+}
+
+impl<P> Drop for Producer<P> {
+  fn drop(&mut self) {
+    self.chan.finish(true);
+  }
+}
+
+/// A cheaply cloneable task producer.
+///
+/// Clone it to write from several places at once. The task ends as abandoned
+/// when the last clone is dropped without [`finish`](Self::finish).
 #[derive(Clone)]
-pub struct TaskHandle<P: Default + Clone> {
-  pub id: String,
-  pub rx: Receiver<TaskData<P>>,
-  pub(super) abort: Arc<AtomicBool>,
+pub struct Task<P> {
+  producer: Arc<Producer<P>>,
+  id: Arc<str>,
 }
-impl<P: Default + Clone + Send + Sync + 'static> TaskHandle<P> {
-  pub fn abort(&self) {
-    self.abort.store(true, Ordering::Relaxed);
+
+impl<P: TaskPayload> Task<P> {
+  /// Creates a task and the first handle observing it.
+  ///
+  /// ```
+  /// #[derive(Default, Clone)]
+  /// struct Bytes { done: u64 }
+  ///
+  /// let (task, handle) = taskee::Task::<Bytes>::new("download");
+  /// task.start();
+  /// task.set(|p| p.done = 42);
+  /// assert_eq!(handle.snapshot().payload.done, 42);
+  /// ```
+  pub fn new(id: impl Into<String>) -> (Self, TaskHandle<P>) {
+    let id: Arc<str> = id.into().into();
+    let chan = Arc::new(Channel::new(Arc::clone(&id)));
+    let handle = TaskHandle::new(Arc::clone(&chan));
+
+    let task = Self {
+      producer: Arc::new(Producer { chan }),
+      id,
+    };
+    (task, handle)
   }
 
-  pub fn was_aborted(&self) -> bool {
-    self.abort.load(Ordering::Relaxed)
+  fn chan(&self) -> &Channel<P> {
+    &self.producer.chan
   }
 
-  pub fn on_update<F: Fn(TaskData<P>) + Send + 'static>(&self, f: F) -> JoinHandle<()> {
-    let mut rx = self.rx.clone();
-    tokio::spawn(async move {
-      while rx.changed().await.is_ok() {
-        let data = rx.borrow().clone();
-        f(data);
-      }
-    })
+  /// The identifier this task was created with
+  pub fn id(&self) -> &str {
+    &self.id
   }
 
-  pub async fn wait(&self) -> TaskData<P> {
-    let mut rx = self.rx.clone();
-    loop {
-      let is_finished = {
-        let state = rx.borrow_and_update();
-        state.finished_at.is_some()
-      };
-      if is_finished || self.was_aborted() {
-        return rx.borrow().clone();
-      }
-      if rx.changed().await.is_err() {
-        break;
-      }
+  /// Opens another handle
+  pub fn handle(&self) -> TaskHandle<P> {
+    TaskHandle::new(Arc::clone(&self.producer.chan))
+  }
+
+  /// Stamps the start time and notifies. Calling it again does nothing.
+  pub fn start(&self) {
+    self.chan().start();
+  }
+
+  /// Ends the task. Calling it again does nothing.
+  pub fn finish(&self) {
+    self.chan().finish(false);
+  }
+
+  /// Mutates the payload. Notifies only if `f` returns `true`
+  pub fn update(&self, f: impl FnOnce(&mut P) -> bool) {
+    self.chan().update(f);
+  }
+
+  /// Mutates the payload and always notifies
+  pub fn set(&self, f: impl FnOnce(&mut P)) {
+    self.chan().update(|payload| {
+      f(payload);
+      true
+    });
+  }
+
+  /// A copy of the current state
+  pub fn snapshot(&self) -> TaskData<P> {
+    self.chan().borrow().clone()
+  }
+
+  /// Whether the task has ended
+  pub fn is_finished(&self) -> bool {
+    self.chan().borrow().is_finished()
+  }
+
+  /// Whether an abort was requested through a handle
+  pub fn is_aborted(&self) -> bool {
+    self.chan().is_aborted()
+  }
+
+  /// Runs `future` unless the task is aborted first.
+  ///
+  /// Returns `None` if the abort won the race. The future is then dropped at
+  /// its last suspension point. Wrap a whole `select!` in it when several
+  /// futures have to give way at once.
+  ///
+  /// ```
+  /// # #[derive(Default, Clone)] struct P;
+  /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+  /// let (task, handle) = taskee::Task::<P>::new("job");
+  /// handle.abort();
+  /// assert!(task.until_aborted(std::future::pending::<()>()).await.is_none());
+  /// # }
+  /// ```
+  pub async fn until_aborted<F: Future>(&self, future: F) -> Option<F::Output> {
+    let aborted = self.chan().aborted();
+    tokio::select! {
+      biased;
+      () = aborted => None,
+      output = future => Some(output),
     }
-    self.rx.borrow().clone()
-  }
-
-  pub async fn wait_map<T, F: FnOnce(TaskData<P>) -> T>(&self, f: F) -> T {
-    let result = self.wait().await;
-    f(result)
-  }
-
-  pub async fn wait_timeout(&self, dur: Duration) -> Result<TaskData<P>, Elapsed> {
-    tokio::time::timeout(dur, self.wait()).await
-  }
-
-  pub fn on_finish<F: FnOnce(TaskData<P>) + Send + 'static>(&self, f: F) -> JoinHandle<()> {
-    let handle = self.clone();
-    tokio::spawn(async move {
-      let result = handle.wait().await;
-      f(result);
-    })
   }
 }
