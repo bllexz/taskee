@@ -1,17 +1,16 @@
 [workspace]
 members = ["taskee-derive"]
-resolver = "2"
-
-[workspace.dependencies]
-tokio = { version = "1.53.1", default-features = false }
-proc-macro2 = { version = "1.0.106", default-features = false }
-quote = "1.0.47"
-syn = { version = "3.0.5", default-features = false }
 
 [package]
 name = "taskee"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Typed, observable state for long-running async tasks. Built on tokio::sync::watch"
+repository = "https://github.com/bllexz/taskee"
+keywords = ["task", "progress", "async", "tokio"]
+categories = ["asynchronous", "concurrency"]
 
 [features]
 default = ["derive", "rt"]
@@ -19,8 +18,18 @@ derive = ["dep:taskee-derive"]
 rt = ["tokio/rt"]
 
 [dependencies]
-taskee-derive = { path = "taskee-derive", optional = true }
-tokio = { workspace = true, features = ["sync", "macros"] }
+taskee-derive = { version = "0.1.0", path = "taskee-derive", optional = true }
+tokio = { version = "1.53.1", default-features = false, features = [
+  "sync",
+  "macros",
+] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1.53.1", default-features = false, features = [
+  "rt-multi-thread",
+  "macros",
+  "time",
+] }
+
+[package.metadata.docs.rs]
+all-features = true

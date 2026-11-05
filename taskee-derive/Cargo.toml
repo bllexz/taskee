@@ -2,11 +2,24 @@
 name = "taskee-derive"
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
-proc-macro2 = { workspace = true, features = ["proc-macro"] }
-quote = { workspace = true }
-syn = { workspace = true, features = ["derive", "parsing", "printing", "proc-macro"] }
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Derive macros for the taskee crate"
+repository = "https://github.com/bllexz/taskee"
+keywords = ["task", "progress", "derive", "macro"]
+categories = ["asynchronous"]
 
 [lib]
 proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0.106", default-features = false, features = [
+  "proc-macro",
+] }
+quote = "1.0.47"
+syn = { version = "3.0.5", default-features = false, features = [
+  "derive",
+  "parsing",
+  "printing",
+  "proc-macro",
+] }
